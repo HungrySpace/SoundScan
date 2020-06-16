@@ -5,9 +5,16 @@ History
 {% endblock %}
 
 {% block body %}
-<div class="container mt-5">
+<div class="container">
     <h1>All</h1>
-    {{ recdb[0].result }}
+
+    {% for el in rec %}
+    <div class="alert alert-info">
+        {{ el.result }}
+        {{ el.comment }}
+        {{ el.date }}
+    </div>
+    {% endfor %}
 
 </div>
 {% endblock %}

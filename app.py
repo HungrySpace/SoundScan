@@ -43,14 +43,10 @@ def project():
     return render_template("project.html")
 
 
-# @app.route('/history')
-# def history():
-#     return render_template("history.html")
-
 @app.route('/history')
 def history():
-    recdb = HistoryComment.query.order_by(HistoryComment.date).all()
-    return render_template("history.html", recdb=recdb)
+    rec = OldRec.query.order_by(OldRec.date).all()
+    return render_template("history.html", rec=rec)
 
 
 if __name__ == "__main__":
