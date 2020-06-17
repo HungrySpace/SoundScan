@@ -3,3 +3,5 @@ flask_sqlalchemy==2.4.3
 datetime
 sounddevice
 scipy
+numpy
+pydub

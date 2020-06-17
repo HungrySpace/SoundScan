@@ -2,12 +2,8 @@ from flask import Flask, render_template, url_for, request, redirect
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import sounddevice as sd
-from scipy.io.wavfile import write
-import scipy.signal as sg
-import scipy.io.wavfile as wav
-from matplotlib import cm
 import numpy as np
-from pydub import AudioSegment
+from scipy.io.wavfile import write
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///history.db'
@@ -27,21 +23,8 @@ class OldRec(db.Model):
         return '<OldRec %r>' % self.id
 
 
-#  перезапись в моно
-def monoaudio():
-    sound = AudioSegment.from_wav("/home/adminmaster/MyProject/SoundScan/output.wav")
-    sound = sound.set_channels(1)
-    sound.export("/home/adminmaster/MyProject/SoundScan/output.wav", format="wav")
-    # get_result()
-
-
 #  парсинг аудио файла
-def get_result():
-    wav_name = '/home/adminmaster/MyProject/SoundScan/output.wav'
-    sample_rate, samples = wav.read(wav_name)
-    frequencies, times, spectrogram = sg.spectrogram(samples, sample_rate, nfft=4096)
-
-    # more brightness, contrast
+def get_result(spectrogram):
     for s1 in spectrogram:
         for i in range(len(s1)):
             s1[i] = np.arctan((s1[i]**0.4)/10)
@@ -49,12 +32,16 @@ def get_result():
     # 2d -> 1d
     i1size = spectrogram.shape[0]
     i2size = spectrogram.shape[1]
+    # print(i1size)
+    # print(i2size)
     spectrogram2 = np.zeros((i1size))
     i1 = 0
     while i1 < i1size:
         i2 = 0
+        # print('-------------------')
         while i2 < i2size:
             spectrogram2[i1] = spectrogram2[i1] + spectrogram[i1, i2]
+            print(spectrogram[i1, i2],)
             i2 = i2 + 1
         i1 = i1 + 1
     b = [spectrogram2[i] for i in range(len(spectrogram2))]
@@ -64,12 +51,13 @@ def get_result():
 
 # заись звука
 def audiofile():
-    fs = 44100
+    # fs = 44100 4096
+    fs = 4096
     second = 3
-    myrecording = sd.rec(int(second * fs), samplerate=fs, channels=2)
+    myrecording = sd.rec(int(second * fs), samplerate=fs, channels=1)
     sd.wait()
     write('output.wav', fs, myrecording)
-    monoaudio()
+    return myrecording
 
 
 #  главная страница
@@ -77,9 +65,9 @@ def audiofile():
 def index():
     #  сли нажали на кнопку на главной страницы
     if request.method == "POST":
-        audiofile()
+        myrecording = audiofile()
         comment = request.form['comment']
-        result = get_result()
+        result = get_result(myrecording)
         # записываем в бд значения
         article = OldRec(comment=comment, result=result)
 
