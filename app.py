@@ -1,6 +1,13 @@
 from flask import Flask, render_template, url_for, request, redirect
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+import sounddevice as sd
+from scipy.io.wavfile import write
+import scipy.signal as sg
+import scipy.io.wavfile as wav
+from matplotlib import cm
+import numpy as np
+from pydub import AudioSegment
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///history.db'
@@ -8,10 +15,11 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 
+#  заливка данных в базу
 class OldRec(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     # nullable=False - нельзя создавать пустое значение
-    result = db.Column(db.String(30))
+    result = db.Column(db.String(300))
     comment = db.Column(db.String(300))
     date = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -19,12 +27,59 @@ class OldRec(db.Model):
         return '<OldRec %r>' % self.id
 
 
+#  перезапись в моно
+def monoaudio():
+    sound = AudioSegment.from_wav("/home/adminmaster/MyProject/SoundScan/output.wav")
+    sound = sound.set_channels(1)
+    sound.export("/home/adminmaster/MyProject/SoundScan/output.wav", format="wav")
+    # get_result()
+
+
+#  парсинг аудио файла
+def get_result():
+    wav_name = '/home/adminmaster/MyProject/SoundScan/output.wav'
+    sample_rate, samples = wav.read(wav_name)
+    frequencies, times, spectrogram = sg.spectrogram(samples, sample_rate, nfft=4096)
+
+    # more brightness, contrast
+    for s1 in spectrogram:
+        for i in range(len(s1)):
+            s1[i] = np.arctan((s1[i]**0.4)/10)
+
+    # 2d -> 1d
+    i1size = spectrogram.shape[0]
+    i2size = spectrogram.shape[1]
+    spectrogram2 = np.zeros((i1size))
+    i1 = 0
+    while i1 < i1size:
+        i2 = 0
+        while i2 < i2size:
+            spectrogram2[i1] = spectrogram2[i1] + spectrogram[i1, i2]
+            i2 = i2 + 1
+        i1 = i1 + 1
+    b = [spectrogram2[i] for i in range(len(spectrogram2))]
+    freq_step = 22100/2048
+    return str(freq_step * b.index(max(b[0:200]))) + 'Hz, ' + str(freq_step * b.index(max(b[300:500]))) + 'Hz, ' + str(freq_step * b.index(max(b[600:800]))) + 'Hz, ' + str(freq_step * b.index(max(b[1200:1500]))) + 'Hz, ' + str(freq_step * b.index(max(b[1600:1900]))) + 'Hz'
+
+
+# заись звука
+def audiofile():
+    fs = 44100
+    second = 3
+    myrecording = sd.rec(int(second * fs), samplerate=fs, channels=2)
+    sd.wait()
+    write('output.wav', fs, myrecording)
+    monoaudio()
+
+
+#  главная страница
 @app.route('/', methods=['POST', 'GET'])
 def index():
+    #  сли нажали на кнопку на главной страницы
     if request.method == "POST":
+        audiofile()
         comment = request.form['comment']
-        result = 'Null'
-
+        result = get_result()
         # записываем в бд значения
         article = OldRec(comment=comment, result=result)
 
@@ -45,7 +100,7 @@ def project():
 
 @app.route('/history')
 def history():
-    rec = OldRec.query.order_by(OldRec.date).all()
+    rec = OldRec.query.order_by(OldRec.date.desc()).all()
     return render_template("history.html", rec=rec)
 
 
